@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ödeme Defteri</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Ödemeler">
+<meta name="theme-color" content="#F1F2F6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0D0F14" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+:root{
+  /* Plan: iOS-native ledger. Dark summary slab on top answers "how much will I have left", rows below, tab bar at the bottom. */
+  --bg:#F1F2F6; --surface:#FFFFFF; --surface-2:#F5F6F9; --ink:#121826; --muted:#5E697D; --line:#E2E5EC;
+  --accent:#3646D6; --accent-ink:#FFFFFF; --accent-soft:#E7E9FC;
+  --pos:#0E7A55; --neg:#C92F27; --warn:#9A5B00; --pos-soft:#E1F3EA; --neg-soft:#FBE6E4; --warn-soft:#FAEFD8;
+  --slab:#141A2C; --slab-ink:#F4F6FB; --slab-muted:#A3ACC3; --slab-pos:#5BE0A8; --slab-neg:#FF8C82; --slab-line:#283150;
+  --font-ui:-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-num:ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --radius:16px;
+  --shadow:0 1px 2px rgba(18,24,38,.05), 0 6px 20px rgba(18,24,38,.06);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D0F14; --surface:#171A21; --surface-2:#1F232C; --ink:#EEF1F6; --muted:#9AA3B5; --line:#2A2F3A;
+    --accent:#8391FF; --accent-ink:#0D0F14; --accent-soft:#232848;
+    --pos:#3DD39A; --neg:#FF6B61; --warn:#F2B544; --pos-soft:#14291F; --neg-soft:#2E1716; --warn-soft:#2D2412;
+    --slab:#1B2138; --slab-line:#2F3858;
+    --shadow:none;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D0F14; --surface:#171A21; --surface-2:#1F232C; --ink:#EEF1F6; --muted:#9AA3B5; --line:#2A2F3A;
+  --accent:#8391FF; --accent-ink:#0D0F14; --accent-soft:#232848;
+  --pos:#3DD39A; --neg:#FF6B61; --warn:#F2B544; --pos-soft:#14291F; --neg-soft:#2E1716; --warn-soft:#2D2412;
+  --slab:#1B2138; --slab-line:#2F3858;
+  --shadow:none;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--ink);font:16px/1.4 var(--font-ui);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+body.locked{overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.wrap{max-width:560px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 10px) max(16px, env(safe-area-inset-right)) calc(110px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));display:flex;flex-direction:column;gap:18px}
+.muted{color:var(--muted)}
+
+/* top bar */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px}
+.topbar h1{margin:0;font-size:26px;font-weight:700;letter-spacing:-.02em;text-wrap:balance}
+.mnav{display:flex;align-items:center;gap:4px}
+.mnav h1{min-width:0;text-align:center}
+.iconbtn{width:40px;height:40px;border-radius:12px;border:0;background:var(--surface);display:grid;place-items:center;color:var(--ink);box-shadow:var(--shadow)}
+.iconbtn svg{width:20px;height:20px}
+.today-link{border:0;background:var(--accent-soft);color:var(--accent);font-weight:600;font-size:14px;padding:8px 12px;border-radius:999px}
+
+/* banners */
+.banner{display:flex;gap:12px;align-items:flex-start;background:var(--surface);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);font-size:14px;border-left:4px solid var(--accent)}
+.banner.warn{border-left-color:var(--warn)}
+.banner p{margin:0;flex:1}
+.banner .bact{border:0;background:none;color:var(--accent);font-weight:600;padding:0;white-space:nowrap;font-size:14px}
+
+/* summary slab */
+.slab{background:var(--slab);color:var(--slab-ink);border-radius:22px;padding:18px 18px 16px;display:flex;flex-direction:column;gap:12px}
+.slab-top{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px;color:var(--slab-muted)}
+.balbtn{border:1px solid var(--slab-line);background:transparent;color:var(--slab-ink);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;display:inline-flex;gap:6px;align-items:center}
+.balbtn svg{width:14px;height:14px}
+.big{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:44px;font-weight:700;letter-spacing:-.02em;line-height:1.05}
+.big small{font-size:24px;font-weight:600;opacity:.8}
+.big.pos{color:var(--slab-pos)} .big.neg{color:var(--slab-neg)}
+.slab-sub{margin:-4px 0 0;font-size:14px;color:var(--slab-muted)}
+.slab-alt{margin:0;font-size:14px;color:var(--slab-ink);background:rgba(255,255,255,.06);border-radius:10px;padding:8px 10px}
+.slab-alt b{font-family:var(--font-num);font-variant-numeric:tabular-nums;white-space:nowrap}
+.slab-alt .pos{color:var(--slab-pos)} .slab-alt .neg{color:var(--slab-neg)}
+.slab-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-top:1px solid var(--slab-line);padding-top:12px}
+.slab-grid div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.slab-grid span{font-size:12px;color:var(--slab-muted)}
+.slab-grid b{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.meter{height:6px;border-radius:99px;background:var(--slab-line);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--slab-pos);border-radius:99px}
+.meter-row{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--slab-muted)}
+.primary-on-slab{align-self:flex-start;border:0;background:var(--slab-ink);color:var(--slab);font-weight:700;border-radius:12px;padding:10px 14px}
+
+/* sections and rows */
+.section{display:flex;flex-direction:column;gap:8px}
+.section h2{margin:0 4px;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);display:flex;justify-content:space-between}
+.section h2 .num{text-transform:none;letter-spacing:0}
+.list{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:0;background:transparent;padding:12px 14px;position:relative}
+.row + .row{border-top:1px solid var(--line)}
+.row.st-overdue::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--neg)}
+.row.st-today::before,.row.st-needs::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--warn)}
+.ico{width:38px;height:38px;flex:none;border-radius:11px;background:var(--surface-2);color:var(--accent);display:grid;place-items:center}
+.ico svg{width:20px;height:20px}
+.st-paid .ico,.st-skipped .ico{color:var(--muted)}
+.mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.name{font-weight:600;overflow-wrap:anywhere}
+.st-paid .name,.st-skipped .name{color:var(--muted)}
+.st-skipped .name{text-decoration:line-through}
+.sub{font-size:13px;color:var(--muted)}
+.end{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none}
+.amt{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-weight:600}
+.st-paid .amt{color:var(--muted)}
+.pill{font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;background:var(--surface-2);color:var(--muted);white-space:nowrap}
+.pill.neg{background:var(--neg-soft);color:var(--neg)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.pos{background:var(--pos-soft);color:var(--pos)}
+.pill.acc{background:var(--accent-soft);color:var(--accent)}
+.minibar{height:4px;border-radius:9px;background:var(--surface-2);overflow:hidden;margin-top:4px;max-width:180px}
+.minibar i{display:block;height:100%;background:var(--accent)}
+.empty{padding:22px 16px;text-align:center;color:var(--muted);font-size:15px}
+.empty b{display:block;color:var(--ink);margin-bottom:4px}
+details.done summary{list-style:none;cursor:pointer}
+details.done summary::-webkit-details-marker{display:none}
+details.done summary h2::after{content:"Göster";font-size:12px;text-transform:none;letter-spacing:0;color:var(--accent)}
+details.done[open] summary h2::after{content:"Gizle"}
+details.done[open] summary{margin-bottom:8px}
+
+/* debts */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.tile span{font-size:13px;color:var(--muted)}
+.tile b{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:22px;font-weight:700;overflow-wrap:anywhere}
+.tile.wide{grid-column:1/-1}
+.prog{height:8px;border-radius:9px;background:var(--surface-2);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--pos);border-radius:9px}
+.debt{display:flex;flex-direction:column;gap:8px;padding:14px;width:100%;border:0;background:transparent;text-align:left}
+.debt + .debt{border-top:1px solid var(--line)}
+.debt-head{display:flex;gap:12px;align-items:center}
+.debt-head .mid{flex:1}
+.debt-meta{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.proj{display:flex;flex-direction:column;gap:10px;padding:14px}
+.proj-row{display:grid;grid-template-columns:76px 1fr auto;gap:10px;align-items:center;font-size:14px}
+.proj-row .track{height:10px;background:var(--surface-2);border-radius:9px;overflow:hidden}
+.proj-row .track i{display:block;height:100%;background:var(--accent);border-radius:9px}
+.proj-row .num{font-weight:600;text-align:right;min-width:96px}
+.note{font-size:13px;color:var(--muted);margin:0 4px}
+
+/* settings */
+.set{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.set-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;min-height:50px;width:100%;border:0;background:transparent;text-align:left}
+.set-row + .set-row{border-top:1px solid var(--line)}
+.set-row.link{color:var(--accent);font-weight:600}
+.set-row.danger{color:var(--neg);font-weight:600}
+.set-row select{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:6px 10px;font-size:16px}
+.set-text{padding:12px 14px;font-size:14px;color:var(--muted);margin:0}
+.set-text + .set-row{border-top:1px solid var(--line)}
+.set-text ol{margin:6px 0 0;padding-left:20px}
+.switch{appearance:none;-webkit-appearance:none;width:51px;height:31px;border-radius:99px;background:var(--line);position:relative;flex:none;transition:background .2s;margin:0}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.2);transition:transform .2s}
+.switch:checked{background:var(--pos)}
+.switch:checked::after{transform:translateX(20px)}
+
+/* tab bar + fab */
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:color-mix(in srgb, var(--surface) 88%, transparent);backdrop-filter:saturate(1.6) blur(18px);-webkit-backdrop-filter:saturate(1.6) blur(18px);border-top:1px solid var(--line);padding:6px max(12px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left))}
+.tabbar-in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.tab{border:0;background:transparent;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;font-weight:600;padding:6px 0}
+.tab svg{width:24px;height:24px}
+.tab[aria-current="page"]{color:var(--accent)}
+.fab{position:fixed;z-index:21;right:max(18px, calc((100vw - 560px)/2 + 18px));bottom:calc(76px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:18px;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;box-shadow:0 8px 24px rgba(54,70,214,.35)}
+.fab svg{width:26px;height:26px}
+
+/* sheet */
+#sheet-root{position:fixed;inset:0;z-index:50;display:none}
+#sheet-root.open{display:block}
+.backdrop{position:absolute;inset:0;background:rgba(8,10,16,.45);border:0;width:100%;padding:0}
+.sheet{position:absolute;left:0;right:0;bottom:0;margin:0 auto;max-width:560px;max-height:min(92vh, 92dvh);overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;background:var(--bg);border-radius:22px 22px 0 0;padding:8px max(16px, env(safe-area-inset-right)) calc(22px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));display:flex;flex-direction:column;gap:14px;animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion: reduce){.sheet{animation:none}.switch,.switch::after{transition:none}}
+.grab{width:38px;height:5px;border-radius:9px;background:var(--line);margin:2px auto 0;flex:none}
+.sheet-head{display:flex;align-items:center;gap:12px}
+.sheet-head .mid{flex:1}
+.sheet-head h3{margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em;overflow-wrap:anywhere}
+.closebtn{border:0;background:var(--surface);color:var(--muted);width:34px;height:34px;border-radius:50%;display:grid;place-items:center;flex:none}
+.closebtn svg{width:16px;height:16px}
+.card{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:12px}
+.kv{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kv div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.kv span{font-size:12px;color:var(--muted)}
+.kv b{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:17px;overflow-wrap:anywhere}
+.kv b.neg{color:var(--neg)} .kv b.pos{color:var(--pos)}
+.duebox{font-size:14px;color:var(--muted)}
+.duebox b{color:var(--ink)}
+.btn{border:0;border-radius:14px;padding:14px 16px;font-weight:700;font-size:16px;display:flex;justify-content:center;align-items:center;gap:8px;width:100%}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.secondary{background:var(--surface);color:var(--accent);box-shadow:var(--shadow)}
+.btn.quiet{background:transparent;color:var(--accent);padding:10px}
+.btn.danger{background:var(--neg-soft);color:var(--neg)}
+.btn .num{font-weight:700}
+.btns{display:flex;flex-direction:column;gap:8px}
+.btn-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.btn-row .btn{font-size:14px;padding:12px 8px}
+form.card{gap:12px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label,.field .lab{font-size:13px;font-weight:600;color:var(--muted)}
+.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);background:var(--surface-2);border-radius:12px;padding:12px 14px;font-size:16px;min-height:46px}
+.field textarea{min-height:120px;font-family:ui-monospace, Menlo, monospace;font-size:13px}
+.field .hint{font-size:12px;color:var(--muted)}
+.field .err{font-size:13px;color:var(--neg);font-weight:600}
+.field .err:empty{display:none}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.check{display:flex;gap:10px;align-items:center;font-size:15px}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border-radius:12px;padding:3px;gap:3px;box-shadow:var(--shadow)}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{text-align:center;padding:9px 4px;border-radius:9px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
+.seg input:checked + label{background:var(--accent);color:var(--accent-ink)}
+.seg input:disabled + label{cursor:default}
+.seg input:focus-visible + label{outline:2px solid var(--accent)}
+.hist{display:flex;flex-direction:column}
+.hist-row{display:flex;align-items:center;gap:10px;padding:10px 0;font-size:14px}
+.hist-row + .hist-row{border-top:1px solid var(--line)}
+.hist-row .mid{flex:1}
+.hist-row .x{border:0;background:var(--surface-2);color:var(--muted);border-radius:9px;padding:6px 10px;font-size:13px;font-weight:600}
+.hidden{display:none !important}
+.foot-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.foot-actions .btn{font-size:14px;padding:12px 6px}
+.copybox{width:100%;min-height:140px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);padding:10px;font:12px/1.4 ui-monospace, Menlo, monospace}
+
+/* add/edit form, grouped iOS style */
+.iform{display:flex;flex-direction:column;gap:10px}
+.ihead{position:sticky;top:-8px;z-index:3;margin:-8px -16px 4px;padding:12px 16px;background:var(--bg);display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;border-bottom:1px solid var(--line)}
+.ihead h3{margin:0;text-align:center;font-size:17px;font-weight:700;letter-spacing:-.01em}
+.pillbtn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:9px 16px;font-weight:600;font-size:16px}
+.pillbtn.strong{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.ierr{margin:0;background:var(--neg-soft);color:var(--neg);font-weight:600;font-size:14px;padding:10px 12px;border-radius:12px}
+.ierr:empty{display:none}
+.group{background:var(--surface);border-radius:20px;box-shadow:var(--shadow);overflow:hidden}
+.group > * + *{border-top:1px solid var(--line)}
+.gin{display:block;width:100%;border:0;background:transparent;padding:16px;font-size:18px;min-height:58px;border-radius:0}
+.gin:focus{outline:none;background:var(--surface-2)}
+.grow{display:flex;align-items:center;gap:12px;padding:11px 16px;min-height:58px;position:relative;cursor:pointer}
+.grow.sub{padding-left:58px;min-height:52px}
+.gico{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:#fff;flex:none}
+.gico svg{width:18px;height:18px}
+.gico.blue{background:#2F7BEA}.gico.violet{background:#7457F2}.gico.green{background:#1C9C5D}.gico.orange{background:#EE8420}
+.glab{flex:1;font-size:17px;min-width:0}
+.glab.acc{color:var(--accent)}
+.glab.nowrap{white-space:nowrap}
+.gval{font-size:17px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.date-row input[type=date]{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;margin:0;padding:0;-webkit-appearance:none;appearance:none;cursor:pointer}
+.date-row:focus-within{box-shadow:inset 0 0 0 2px var(--accent)}
+.gin-r{border:0;background:var(--surface-2);border-radius:10px;padding:8px 12px;font-size:17px;text-align:right;width:150px;min-height:38px;-webkit-appearance:none;appearance:none}
+select.gin-r{text-align:left;width:auto}
+.timepill{border:0;background:var(--surface-2);border-radius:12px;padding:8px 14px;font-size:17px;min-height:38px;-webkit-appearance:none;appearance:none}
+.ghead{margin:8px 4px 0;font-size:15px;font-weight:600;color:var(--muted)}
+.gnote{margin:0 4px;font-size:13px;color:var(--muted)}
+.gnote:empty{display:none}
+.switch.blue:checked{background:#2F7BEA}.switch.orange:checked{background:#EE8420}.switch.violet:checked{background:#7457F2}
+.switch:disabled{opacity:.55}
+
+/* toast */
+#toast{position:fixed;z-index:60;left:50%;transform:translateX(-50%);bottom:calc(142px + env(safe-area-inset-bottom));background:var(--ink);color:var(--bg);padding:10px 12px 10px 16px;border-radius:14px;font-size:14px;display:none;align-items:center;gap:12px;max-width:calc(100vw - 32px);box-shadow:0 8px 24px rgba(0,0,0,.25)}
+#toast.show{display:flex}
+#toast button{white-space:nowrap;border:0;background:transparent;color:var(--accent-soft);font-weight:700;padding:4px 6px}
+
+@media (max-width:370px){
+  .big{font-size:38px}
+  .slab-grid b{font-size:14px}
+  .seg label{font-size:12px}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<nav class="tabbar" aria-label="Bölümler"><div class="tabbar-in" id="tabs"></div></nav>
+<button class="fab" type="button" data-action="add" aria-label="Yeni ödeme ekle" id="fab"></button>
+<div id="sheet-root"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="file-input" accept="application/json,.json,text/plain" hidden>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- constants & small helpers ---------- */
+const KEY = 'odeme-defteri-v1';
+const VERSION = '1.0';
+const pad = n => String(n).padStart(2, '0');
+const ymOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+const ymdOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const localISO = d => `${ymdOf(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+const parseYM = s => { const [y, m] = s.split('-').map(Number); return { y, m }; };
+const addM = (s, n) => { const { y, m } = parseYM(s); return ymOf(new Date(y, m - 1 + n, 1)); };
+const dim = (y, m) => new Date(y, m, 0).getDate();
+const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+const dayDiff = (a, b) => Math.round((a - b) / 86400000);
+const r2 = n => Math.round(n * 100) / 100;
+const sum = (arr, f = x => x) => arr.reduce((a, x) => a + f(x), 0);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const curYM = () => ymOf(new Date());
+
+const fmtMoney = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtNum = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtMonth = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
+const fmtMonthShort = new Intl.DateTimeFormat('tr-TR', { month: 'short', year: '2-digit' });
+const fmtMonthOnly = new Intl.DateTimeFormat('tr-TR', { month: 'long' });
+const fmtDay = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', weekday: 'short' });
+const fmtDate = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtLong = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+const money = n => fmtMoney.format(Math.abs(n) < 0.005 ? 0 : n);
+const signed = n => (n < -0.004 ? '−' : '+') + money(Math.abs(n));
+const monthLabel = P => { const { y, m } = parseYM(P); return fmtMonth.format(new Date(y, m - 1, 1)); };
+const monthShort = P => { const { y, m } = parseYM(P); return fmtMonthShort.format(new Date(y, m - 1, 1)); };
+const monthName = m => fmtMonthOnly.format(new Date(2026, m - 1, 1));
+function bigMoney(n, withSign) {
+  const s = withSign ? signed(n) : money(n);
+  const i = s.lastIndexOf(',');
+  return i < 0 ? `<span>${s}</span>` : `<span>${s.slice(0, i)}</span><small>${s.slice(i)}</small>`;
+}
+function parseMoney(s) {
+  if (s == null) return NaN;
+  s = String(s).trim().replace(/[₺\s]/g, '').replace(/tl$/i, '');
+  if (!s) return NaN;
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  else {
+    const parts = s.split('.');
+    if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) s = parts.join('');
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? r2(n) : NaN;
+}
+const numVal = n => (n == null || n === '' || Number.isNaN(n)) ? '' : fmtNum.format(n);
+
+/* ---------- Turkish public holidays (payments move to the next working day) ---------- */
+const FIXED_HOL = ['01-01', '04-23', '05-01', '05-19', '07-15', '08-30', '10-29'];
+const VAR_HOL = new Set([
+  // Ramazan ve Kurban Bayramı (arife hariç). Liste 2026–2027'yi kapsar.
+  '2026-03-20', '2026-03-21', '2026-03-22', '2026-05-27', '2026-05-28', '2026-05-29', '2026-05-30',
+  '2027-03-09', '2027-03-10', '2027-03-11', '2027-05-16', '2027-05-17', '2027-05-18', '2027-05-19'
+]);
+function isOffDay(d) {
+  const w = d.getDay();
+  if (w === 0 || w === 6) return true;
+  const s = ymdOf(d);
+  return FIXED_HOL.includes(s.slice(5)) || VAR_HOL.has(s);
+}
+
+/* ---------- icons ---------- */
+const svg = (p, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${p}</svg>`;
+const IC = {
+  kart: svg('<rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h3"/>'),
+  kredi: svg('<path d="M12 3.5 3.5 8h17Z"/><path d="M5.5 10.5v7M10 10.5v7M14 10.5v7M18.5 10.5v7M3.5 20.5h17"/>'),
+  kira: svg('<path d="M4 11.5 12 5l8 6.5"/><path d="M6 10v9.5h12V10"/><path d="M10 19.5v-5h4v5"/>'),
+  fatura: svg('<path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/>'),
+  abonelik: svg('<path d="M17 3.5l3 3-3 3"/><path d="M20 6.5H8a4 4 0 0 0-4 4v1"/><path d="M7 20.5l-3-3 3-3"/><path d="M4 17.5h12a4 4 0 0 0 4-4v-1"/>'),
+  aidat: svg('<rect x="5" y="3.5" width="14" height="17" rx="1.5"/><path d="M9 8h1.5M13.5 8H15M9 12h1.5M13.5 12H15M10.5 20.5v-4h3v4"/>'),
+  sigorta: svg('<path d="M12 3.5 5 6v5.5c0 4.2 3 7.6 7 9 4-1.4 7-4.8 7-9V6z"/><path d="m9 12 2 2 4-4"/>'),
+  egitim: svg('<path d="M2.5 9 12 4.5 21.5 9 12 13.5z"/><path d="M6.5 11v4.5c1.5 1.5 3.5 2.2 5.5 2.2s4-.7 5.5-2.2V11"/>'),
+  diger: svg('<path d="M3.5 12.5V4.5h8l9 9-8 8z"/><circle cx="8" cy="9" r="1.3"/>'),
+  tek: svg('<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>'),
+  tabMonth: svg('<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M8 14h3"/>'),
+  tabDebt: svg('<path d="M5 20V11M11 20V5M17 20v-6M3 20.5h18"/>'),
+  tabSet: svg('<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>'),
+  plus: svg('<path d="M12 5v14M5 12h14"/>', 'stroke-width="2.2"'),
+  left: svg('<path d="m14.5 6-6 6 6 6"/>', 'stroke-width="2.2"'),
+  right: svg('<path d="m9.5 6 6 6-6 6"/>', 'stroke-width="2.2"'),
+  x: svg('<path d="M6 6l12 12M18 6 6 18"/>', 'stroke-width="2.4"'),
+  edit: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/>', 'stroke-width="2"'),
+  bell: svg('<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>')
+};
+const fileSlug = n => n.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase().replace(/^-|-$/g, '') || 'odeme';
+const CATS = [['fatura', 'Fatura'], ['abonelik', 'Abonelik'], ['kira', 'Kira'], ['aidat', 'Aidat'], ['sigorta', 'Sigorta'], ['egitim', 'Eğitim'], ['diger', 'Diğer']];
+const KIND_LABEL = { recurring: 'Düzenli ödeme', card: 'Kredi kartı', loan: 'Kredi / taksit', once: 'Tek seferlik' };
+function iconFor(it) {
+  if (it.kind === 'card') return IC.kart;
+  if (it.kind === 'loan') return IC.kredi;
+  if (it.kind === 'once') return IC.tek;
+  return IC[it.cat] || IC.diger;
+}
+
+/* ---------- storage ---------- */
+let inFrame = false;
+try { inFrame = window.self !== window.top; } catch (e) { inFrame = true; }
+let canPersist = true;
+try { localStorage.setItem(KEY + '-t', '1'); localStorage.removeItem(KEY + '-t'); } catch (e) { canPersist = false; }
+
+function defaults() {
+  return { version: 1, items: [], payments: [], balances: {}, settings: { shift: true, hour: 9, dayBefore: true, lastBackup: null }, sample: false };
+}
+function normalize(s) {
+  const d = defaults();
+  const out = Object.assign(d, s || {});
+  out.settings = Object.assign(defaults().settings, (s && s.settings) || {});
+  out.items = Array.isArray(out.items) ? out.items : [];
+  out.payments = Array.isArray(out.payments) ? out.payments : [];
+  out.balances = out.balances && typeof out.balances === 'object' ? out.balances : {};
+  for (const it of out.items) {
+    it.overrides = it.overrides || {};
+    it.skips = it.skips || [];
+    if (it.kind === 'card') it.statements = it.statements || {};
+  }
+  return out;
+}
+function load() {
+  if (!canPersist) return null;
+  try { const raw = localStorage.getItem(KEY); return raw ? normalize(JSON.parse(raw)) : null; } catch (e) { return null; }
+}
+function save() {
+  if (!canPersist) return;
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { canPersist = false; }
+}
+
+function seed() {
+  const now = new Date(); const P = ymOf(now); const td = now.getDate();
+  const at = (day, h) => `${P}-${pad(Math.min(day, td))}T${pad(h)}:00:00`;
+  const s = defaults();
+  s.sample = true;
+  s.items = [
+    { id: 's-kira', kind: 'recurring', cat: 'kira', name: 'Kira', amount: 22500, dueDay: 1, freq: 'monthly', start: P, sample: true },
+    { id: 's-kredi', kind: 'loan', name: 'İhtiyaç kredisi', total: 96000, installment: 8000, dueDay: 5, start: P, sample: true },
+    { id: 's-aidat', kind: 'recurring', cat: 'aidat', name: 'Site aidatı', amount: 1750, dueDay: 10, freq: 'monthly', start: P, sample: true },
+    { id: 's-muzik', kind: 'recurring', cat: 'abonelik', name: 'Müzik aboneliği', amount: 99.99, dueDay: td, freq: 'monthly', start: P, sample: true },
+    { id: 's-net', kind: 'recurring', cat: 'fatura', name: 'İnternet', amount: 649.9, dueDay: 17, freq: 'monthly', start: P, sample: true },
+    { id: 's-kart', kind: 'card', name: 'Kredi kartı', dueDay: 20, start: P, statements: { [P]: { amount: 18450, min: 3690 } }, sample: true },
+    { id: 's-elek', kind: 'recurring', cat: 'fatura', name: 'Elektrik', amount: 850, dueDay: 24, freq: 'monthly', start: P, sample: true }
+  ];
+  s.payments = [
+    { id: 's-p1', itemId: 's-kira', period: P, amount: 22500, at: at(1, 10), deduct: true },
+    { id: 's-p2', itemId: 's-kredi', period: P, amount: 8000, at: at(5, 12), deduct: true }
+  ];
+  s.balances = { [P]: { amount: 62000, at: `${P}-01T08:00:00`, sample: true } };
+  return normalize(s);
+}
+
+let state = load();
+if (!state) { state = seed(); save(); }
+
+/* ---------- domain logic ---------- */
+const byId = id => state.items.find(i => i.id === id);
+const paysOf = (id, P) => state.payments.filter(p => p.itemId === id && (P == null || p.period === P));
+const paidIn = (id, P) => r2(sum(paysOf(id, P), p => p.amount));
+
+function baseDate(it, P) {
+  const { y, m } = parseYM(P);
+  if (it.kind === 'once') return it.date && it.date.slice(0, 7) === P ? new Date(it.date + 'T00:00:00') : null;
+  if (P < it.start) return null;
+  if (it.kind === 'recurring' && it.freq === 'yearly' && m !== Number(it.month)) return null;
+  return new Date(y, m - 1, Math.min(it.dueDay, dim(y, m)));
+}
+const shiftOn = it => it.kind !== 'once' && (it.shift != null ? it.shift : state.settings.shift);
+function dueInfo(it, P) {
+  const b = baseDate(it, P);
+  if (!b) return null;
+  const d = new Date(b);
+  let shifted = false;
+  if (shiftOn(it)) {
+    let guard = 0;
+    while (isOffDay(d) && guard < 10) { d.setDate(d.getDate() + 1); shifted = true; guard++; }
+  }
+  return { date: d, base: b, shifted };
+}
+function loanLeft(it) { return r2(it.total - paidIn(it.id)); }
+function loanDue(it, P) {
+  if (P < it.start) return null;
+  const cur = curYM();
+  let left = r2(it.total - sum(state.payments.filter(p => p.itemId === it.id && p.period < P), p => p.amount));
+  if (P > cur) {
+    // Assume the months between now and P are paid as scheduled.
+    let Q = it.start > cur ? it.start : cur;
+    let l = r2(it.total - sum(state.payments.filter(p => p.itemId === it.id && p.period < Q), p => p.amount));
+    while (Q < P) {
+      if (l <= 0.004) break;
+      const d = Math.min(it.installment, l);
+      const pq = paidIn(it.id, Q);
+      left -= Math.max(0, d - pq);
+      l = r2(l - Math.max(d, pq));
+      Q = addM(Q, 1);
+    }
+    left = r2(left);
+  }
+  if (left <= 0.004) return null;
+  return Math.min(it.installment, left);
+}
+
+function occ(it, P) {
+  const dd = dueInfo(it, P);
+  if (!dd) return null;
+  const paid = paidIn(it.id, P);
+  let due = 0, min = null, needs = false;
+  const skipped = (it.skips || []).includes(P);
+  if (it.kind === 'recurring') due = it.overrides && it.overrides[P] != null ? it.overrides[P] : it.amount;
+  else if (it.kind === 'once') due = it.amount;
+  else if (it.kind === 'loan') {
+    const d = loanDue(it, P);
+    if (d == null) { if (paid <= 0) return null; due = paid; } else due = d;
+  } else if (it.kind === 'card') {
+    const st = it.statements && it.statements[P];
+    if (!st) needs = true; else { due = st.amount; min = st.min != null && st.min !== '' ? st.min : null; }
+  }
+  due = r2(due);
+  const remaining = skipped || needs ? 0 : Math.max(0, r2(due - paid));
+  const minLeft = min != null ? Math.max(0, r2(min - paid)) : null;
+  const days = dayDiff(dd.date, today0());
+  let status;
+  if (skipped) status = 'skipped';
+  else if (needs) status = 'needs';
+  else if (remaining <= 0.004) status = 'paid';
+  else if (min != null && paid > 0 && minLeft <= 0.004) status = 'minpaid';
+  else if (days < 0) status = 'overdue';
+  else if (days === 0) status = 'today';
+  else if (paid > 0) status = 'partial';
+  else if (days <= 3) status = 'soon';
+  else status = 'upcoming';
+  return { item: it, P, ...dd, days, due, paid, remaining, min, minLeft, needs, skipped, status };
+}
+
+function monthData(P) {
+  const cur = curYM();
+  const rows = [], overdue = [];
+  for (const it of state.items) {
+    const o = occ(it, P);
+    if (o) rows.push(o);
+    if (P === cur) {
+      for (let k = 1; k <= 12; k++) {
+        const Q = addM(P, -k);
+        const o2 = occ(it, Q);
+        if (!o2 || o2.skipped || o2.needs) continue;
+        if (it.kind === 'card' && o2.min != null) {
+          // Unpaid card balance rolls into the next statement; only a missed minimum is overdue.
+          if (o2.minLeft <= 0.004) continue;
+          o2.remaining = o2.minLeft;
+        } else if (o2.remaining <= 0.004) continue;
+        o2.status = 'overdue'; o2.past = true;
+        overdue.push(o2);
+      }
+    }
+  }
+  const all = overdue.concat(rows);
+  const remaining = r2(sum(all, o => o.remaining));
+  const remainingMin = r2(sum(all, o => (o.item.kind === 'card' && o.min != null && !o.past) ? Math.min(o.remaining, o.minLeft) : o.remaining));
+  const paid = r2(sum(all, o => o.paid));
+  const total = rows.filter(o => !o.skipped && !o.needs).length + overdue.length;
+  const doneCount = rows.filter(o => o.status === 'paid').length;
+  return { rows, overdue, remaining, remainingMin, paid, total, doneCount, hasMinOption: remainingMin < remaining - 0.004 };
+}
+
+function balanceInfo(P) {
+  const b = state.balances[P];
+  if (!b) return null;
+  const spent = r2(sum(state.payments.filter(p => p.deduct !== false && p.at >= b.at && p.at.slice(0, 7) === P), p => p.amount));
+  return { set: b.amount, at: b.at, spent, current: r2(b.amount - spent) };
+}
+
+function dueText(o) {
+  if (o.status === 'paid') return 'Ödendi';
+  if (o.status === 'skipped') return 'Bu ay atlandı';
+  if (o.days === 0) return 'Bugün';
+  if (o.days === 1) return 'Yarın';
+  if (o.days > 1) return `${o.days} gün kaldı`;
+  return `${-o.days} gün gecikti`;
+}
+const PILL = {
+  overdue: ['Gecikti', 'neg'], today: ['Bugün', 'warn'], soon: ['Yaklaşıyor', 'acc'], partial: ['Kısmi', 'acc'],
+  minpaid: ['Asgari ödendi', 'warn'], paid: ['Ödendi', 'pos'], skipped: ['Atlandı', ''], needs: ['Ekstre gir', 'warn']
+};
+
+/* ---------- UI state ---------- */
+let view = 'month';
+let viewP = curYM();
+let sheet = null; // {type, ...}
+let undoSnap = null;
+const app = document.getElementById('app');
+const sheetRoot = document.getElementById('sheet-root');
+
+/* ---------- views ---------- */
+function rowHTML(o) {
+  const it = o.item;
+  const [pl, pc] = PILL[o.status] || ['', ''];
+  let right;
+  if (o.needs) right = `<span class="amt muted">—</span>`;
+  else if (o.status === 'paid') right = `<span class="amt">${money(o.paid)}</span>`;
+  else if (o.skipped) right = `<span class="amt muted">${money(o.due)}</span>`;
+  else right = `<span class="amt">${money(o.remaining)}</span>`;
+  let sub;
+  if (o.needs) sub = `${fmtDay.format(o.date)} · bu ayın ekstresini gir`;
+  else if (o.past) sub = `${monthLabel(o.P)} · ${dueText(o)}`;
+  else if (o.status === 'paid' || o.skipped) sub = fmtDay.format(o.date);
+  else sub = `${fmtDay.format(o.date)} · ${dueText(o)}`;
+  if (o.status === 'minpaid') sub += ' · kalan sonraki ekstreye geçer';
+  const bar = (o.paid > 0 && o.remaining > 0 && o.due > 0) ? `<span class="minibar"><i style="width:${Math.min(100, o.paid / o.due * 100).toFixed(1)}%"></i></span>` : '';
+  return `<button type="button" class="row st-${o.status}" data-action="open-item" data-id="${esc(it.id)}" data-p="${o.P}">
+    <span class="ico">${iconFor(it)}</span>
+    <span class="mid"><span class="name">${esc(it.name)}</span><span class="sub">${sub}</span>${bar}</span>
+    <span class="end">${right}${pl && o.status !== 'paid' ? `<span class="pill ${pc}">${pl}</span>` : ''}</span>
+  </button>`;
+}
+
+function bannersHTML() {
+  let h = '';
+  if (inFrame || !canPersist) h += `<div class="banner warn"><p><b>Önizleme modu.</b> Burada girdiğin veriler kalıcı değil ve dosya indirme çalışmaz. Uygulamayı kendi adresinde açıp ana ekrana ekleyince her şey çalışır.</p></div>`;
+  if (state.sample) h += `<div class="banner"><p>Uygulama örnek verilerle açıldı. Kendi ödemelerini girmeden önce örnekleri silebilirsin.</p><button class="bact" type="button" data-action="clear-sample">Örnekleri sil</button></div>`;
+  else if (state.items.length && canPersist && !inFrame) {
+    const lb = state.settings.lastBackup;
+    const age = lb ? dayDiff(today0(), new Date(lb.slice(0, 10) + 'T00:00:00')) : null;
+    if (age == null || age >= 14) h += `<div class="banner warn"><p>${age == null ? 'Henüz yedek almadın.' : `Son yedeğin ${age} gün önce.`} Telefon verisi silinirse kaybolmasın.</p><button class="bact" type="button" data-action="backup-download">Yedek al</button></div>`;
+  }
+  return h;
+}
+
+function monthView() {
+  const P = viewP, cur = curYM();
+  const md = monthData(P);
+  const bal = balanceInfo(P);
+  const net = bal ? r2(bal.current - md.remaining) : null;
+  const netMin = bal ? r2(bal.current - md.remainingMin) : null;
+  const needsCards = md.rows.filter(o => o.needs);
+  const open = md.rows.filter(o => !['paid', 'skipped', 'needs', 'overdue'].includes(o.status)).sort((a, b) => a.date - b.date || a.item.name.localeCompare(b.item.name, 'tr'));
+  const late = md.overdue.concat(md.rows.filter(o => o.status === 'overdue')).sort((a, b) => a.date - b.date);
+  const done = md.rows.filter(o => o.status === 'paid' || o.status === 'skipped').sort((a, b) => a.date - b.date);
+  const pct = md.paid + md.remaining > 0 ? md.paid / (md.paid + md.remaining) * 100 : 0;
+
+  let slab = `<section class="slab" aria-label="Ay özeti">
+    <div class="slab-top"><span>${bal ? 'Ay sonu durumu' : 'Bu ay kalan ödeme'}</span>
+      <button type="button" class="balbtn" data-action="balance" data-p="${P}">${IC.edit}${bal ? 'Bakiye' : 'Bakiye gir'}</button></div>`;
+  if (bal) {
+    slab += `<div class="big ${net < -0.004 ? 'neg' : 'pos'}">${bigMoney(net, true)}</div>
+      <p class="slab-sub">${net < -0.004 ? 'Bu ayın kalan ödemelerine yetmeyen tutar' : 'Bu ayın kalan ödemeleri yapıldıktan sonra kalacak para'}</p>`;
+    if (md.hasMinOption) slab += `<p class="slab-alt">Kartlarda sadece asgariyi ödersen: <b class="${netMin < -0.004 ? 'neg' : 'pos'}">${signed(netMin)}</b></p>`;
+  } else {
+    slab += `<div class="big">${bigMoney(md.remaining)}</div>
+      <p class="slab-sub">Bu ayki TL bakiyeni girersen, ödemelerden sonra ne kalacağını (+ ya da −) gösteririm.</p>
+      <button type="button" class="primary-on-slab" data-action="balance" data-p="${P}">${monthName(parseYM(P).m)} bakiyemi gir</button>`;
+  }
+  slab += `<div class="slab-grid">
+      <div><span>Mevcut bakiye</span><b>${bal ? money(bal.current) : '—'}</b></div>
+      <div><span>Kalan ödeme</span><b>${money(md.remaining)}</b></div>
+      <div><span>Ödenen</span><b>${money(md.paid)}</b></div>
+    </div>
+    <div class="meter-row"><div class="meter" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct.toFixed(1)}%"></i></div>
+    <span>${md.doneCount} / ${md.total} ödeme tamamlandı${needsCards.length ? ` · ${needsCards.length} kartın ekstresi girilmedi` : ''}</span></div>
+  </section>`;
+
+  const sect = (title, list, extra = '') => list.length ? `<section class="section"><h2><span>${title}</span><span class="num">${extra}</span></h2><div class="list">${list.map(rowHTML).join('')}</div></section>` : '';
+  let body = '';
+  body += sect('Gecikmiş', late, money(sum(late, o => o.remaining)));
+  body += sect('Ekstre bekleniyor', needsCards);
+  body += sect(P === cur ? 'Bu ay ödenecek' : P < cur ? 'Ödenmemiş' : 'Ödenecek', open, money(sum(open, o => o.remaining)));
+  if (done.length) body += `<details class="done section"${open.length + late.length === 0 ? ' open' : ''}><summary><h2><span>Ödenenler (${done.length})</span></h2></summary><div class="list">${done.map(rowHTML).join('')}</div></details>`;
+  if (!state.items.length) body += `<div class="list"><div class="empty"><b>Henüz ödeme yok</b>Sağ alttaki + ile kredi kartı, kredi, fatura veya abonelik ekle.</div></div>`;
+  else if (!md.rows.length && !md.overdue.length) body += `<div class="list"><div class="empty"><b>Bu ay için ödeme yok</b>${P < cur ? 'Bu tarihten önce başlayan bir ödeme bulunmuyor.' : 'Ödemelerin başlangıç ayı daha ileride olabilir.'}</div></div>`;
+
+  return `<div class="wrap">
+    <header class="topbar">
+      <div class="mnav">
+        <button class="iconbtn" type="button" data-action="nav-month" data-d="-1" aria-label="Önceki ay">${IC.left}</button>
+        <h1>${monthLabel(P)}</h1>
+        <button class="iconbtn" type="button" data-action="nav-month" data-d="1" aria-label="Sonraki ay">${IC.right}</button>
+      </div>
+      ${P !== cur ? `<button class="today-link" type="button" data-action="nav-today">Bu ay</button>` : ''}
+    </header>
+    ${bannersHTML()}
+    ${slab}
+    ${body}
+  </div>`;
+}
+
+function debtsView() {
+  const cur = curYM();
+  const loans = state.items.filter(i => i.kind === 'loan');
+  const cards = state.items.filter(i => i.kind === 'card');
+  const recs = state.items.filter(i => i.kind === 'recurring');
+  const onces = state.items.filter(i => i.kind === 'once');
+
+  const loanInfo = loans.map(it => {
+    const left = Math.max(0, loanLeft(it));
+    const paid = r2(it.total - left);
+    const n = left > 0 ? Math.ceil(left / it.installment - 1e-9) : 0;
+    let lastP = null;
+    if (n > 0) { const o = occ(it, cur); const startP = it.start > cur ? it.start : (o && o.remaining <= 0.004 ? addM(cur, 1) : cur); lastP = addM(startP, n - 1); }
+    return { it, left, paid, n, lastP };
+  });
+  const cardInfo = cards.map(it => {
+    const ps = Object.keys(it.statements || {}).filter(p => p <= cur).sort();
+    const P = ps[ps.length - 1];
+    const o = P ? occ(it, P) : null;
+    return { it, P, o, left: o ? o.remaining : 0 };
+  });
+  const onceInfo = onces.map(it => ({ it, left: Math.max(0, r2(it.amount - paidIn(it.id))) })).filter(x => x.left > 0);
+  const totalDebt = r2(sum(loanInfo, x => x.left) + sum(cardInfo, x => x.left) + sum(onceInfo, x => x.left));
+  const monthlyFixed = r2(sum(recs, it => it.freq === 'yearly' ? it.amount / 12 : it.amount) + sum(loanInfo.filter(x => x.left > 0), x => Math.min(x.it.installment, x.left)));
+
+  // 6-month outlook
+  const proj = [];
+  for (let k = 0; k < 6; k++) {
+    const P = addM(cur, k);
+    let tot = 0, missing = 0;
+    for (const it of state.items) {
+      const o = occ(it, P);
+      if (!o || o.skipped) continue;
+      if (o.needs) { missing++; continue; }
+      tot += k === 0 ? o.remaining : o.due;
+    }
+    proj.push({ P, tot: r2(tot), missing });
+  }
+  const maxP = Math.max(1, ...proj.map(p => p.tot));
+
+  let h = `<div class="wrap"><header class="topbar"><h1>Borçlar</h1></header>
+    <div class="tiles">
+      <div class="tile wide"><span>Toplam kalan borç</span><b>${money(totalDebt)}</b><span>Krediler, kartların son ekstresi ve tek seferlik borçlar</span></div>
+      <div class="tile"><span>Aylık sabit ödeme</span><b>${money(monthlyFixed)}</b></div>
+      <div class="tile"><span>Bu ay kalan</span><b>${money(monthData(cur).remaining)}</b></div>
+    </div>`;
+
+  if (loanInfo.length) {
+    h += `<section class="section"><h2><span>Krediler ve taksitler</span></h2><div class="list">` + loanInfo.map(x => `
+      <button type="button" class="debt" data-action="open-item" data-id="${esc(x.it.id)}" data-p="${cur}">
+        <span class="debt-head"><span class="ico">${IC.kredi}</span><span class="mid"><span class="name">${esc(x.it.name)}</span><span class="sub">Taksit ${money(x.it.installment)} · her ayın ${x.it.dueDay}. günü</span></span>
+        <span class="end"><span class="amt">${money(x.left)}</span>${x.left <= 0 ? '<span class="pill pos">Bitti</span>' : ''}</span></span>
+        <span class="prog"><i style="width:${(x.it.total > 0 ? x.paid / x.it.total * 100 : 0).toFixed(1)}%"></i></span>
+        <span class="debt-meta"><span>${money(x.paid)} ödendi / ${money(x.it.total)}</span><span>${x.n ? `${x.n} taksit kaldı · son ${monthLabel(x.lastP)}` : 'Kapandı'}</span></span>
+      </button>`).join('') + `</div></section>`;
+  }
+  if (cardInfo.length) {
+    h += `<section class="section"><h2><span>Kredi kartları</span></h2><div class="list">` + cardInfo.map(x => {
+      const o = x.o;
+      const meta = o ? `${monthLabel(x.P)} ekstresi ${money(o.due)}${o.min != null ? ` · asgari ${money(o.min)}` : ''}` : 'Henüz ekstre girilmedi';
+      return `<button type="button" class="debt" data-action="open-item" data-id="${esc(x.it.id)}" data-p="${x.P || cur}">
+        <span class="debt-head"><span class="ico">${IC.kart}</span><span class="mid"><span class="name">${esc(x.it.name)}</span><span class="sub">${meta}</span></span>
+        <span class="end"><span class="amt">${money(x.left)}</span>${o ? `<span class="pill ${PILL[o.status][1]}">${PILL[o.status][0]}</span>` : ''}</span></span>
+        ${o && o.due > 0 ? `<span class="prog"><i style="width:${Math.min(100, o.paid / o.due * 100).toFixed(1)}%"></i></span>` : ''}
+      </button>`;
+    }).join('') + `</div></section>`;
+  }
+  if (onceInfo.length) {
+    h += `<section class="section"><h2><span>Tek seferlik borçlar</span></h2><div class="list">` + onceInfo.map(x => `
+      <button type="button" class="row" data-action="open-item" data-id="${esc(x.it.id)}" data-p="${x.it.date.slice(0, 7)}">
+        <span class="ico">${IC.tek}</span><span class="mid"><span class="name">${esc(x.it.name)}</span><span class="sub">${fmtDate.format(new Date(x.it.date + 'T00:00:00'))}</span></span>
+        <span class="end"><span class="amt">${money(x.left)}</span></span></button>`).join('') + `</div></section>`;
+  }
+  h += `<section class="section"><h2><span>Önümüzdeki 6 ay</span></h2><div class="list"><div class="proj">` + proj.map((p, k) => `
+      <div class="proj-row"><span>${k === 0 ? 'Bu ay*' : monthShort(p.P)}</span><span class="track"><i style="width:${(p.tot / maxP * 100).toFixed(1)}%"></i></span><span class="num">${money(p.tot)}</span></div>`).join('') +
+    `</div></div><p class="note">* Bu ay için sadece kalan kısım gösterilir. Gelecek aylarda kart ekstreleri bilinmediği için dahil değildir.</p></section>`;
+  if (recs.length) {
+    h += `<section class="section"><h2><span>Düzenli ödemeler</span><span class="num">${money(sum(recs, it => it.freq === 'yearly' ? it.amount / 12 : it.amount))} / ay</span></h2><div class="list">` +
+      recs.slice().sort((a, b) => a.dueDay - b.dueDay).map(it => `<button type="button" class="row" data-action="open-item" data-id="${esc(it.id)}" data-p="${cur}">
+        <span class="ico">${iconFor(it)}</span><span class="mid"><span class="name">${esc(it.name)}</span><span class="sub">${it.freq === 'yearly' ? `Her yıl ${it.dueDay} ${monthName(it.month)}` : `Her ayın ${it.dueDay}. günü`}</span></span>
+        <span class="end"><span class="amt">${money(it.amount)}</span></span></button>`).join('') + `</div></section>`;
+  }
+  if (!state.items.length) h += `<div class="list"><div class="empty"><b>Henüz borç yok</b>Sağ alttaki + ile ekleyebilirsin.</div></div>`;
+  return h + `</div>`;
+}
+
+function settingsView() {
+  const s = state.settings;
+  const hours = Array.from({ length: 16 }, (_, i) => i + 6).map(h => `<option value="${h}"${h === Number(s.hour) ? ' selected' : ''}>${pad(h)}:00</option>`).join('');
+  const lb = s.lastBackup ? fmtDate.format(new Date(s.lastBackup)) : 'hiç alınmadı';
+  return `<div class="wrap"><header class="topbar"><h1>Ayarlar</h1></header>
+    <section class="section"><h2><span>Bildirimler</span></h2><div class="set">
+      <p class="set-text">Ödemelerin iPhone Takvim'ine tekrarlayan etkinlik olarak eklenir. Ödeme günü geldiğinde telefonun kendi bildirimi gelir. Yeni ödeme ekledikten sonra sadece o ödemeyi, ödemenin ekranındaki “Takvime ekle” ile aktarabilirsin.</p>
+      <button type="button" class="set-row link" data-action="export-ics">Tüm ödemeleri Takvim'e aktar</button>
+      <label class="set-row" for="set-hour"><span>Yeni ödemelerde bildirim saati</span><select id="set-hour" data-change="hour">${hours}</select></label>
+      <label class="set-row" for="set-daybefore"><span>1 gün önce de hatırlat</span><input id="set-daybefore" type="checkbox" class="switch" role="switch" data-change="dayBefore"${s.dayBefore ? ' checked' : ''}></label>
+    </div></section>
+    <section class="section"><h2><span>Ödeme günleri</span></h2><div class="set">
+      <label class="set-row" for="set-shift"><span>Yeni ödemelerde iş gününe ertele (varsayılan)</span><input id="set-shift" type="checkbox" class="switch" role="switch" data-change="shift"${s.shift ? ' checked' : ''}></label>
+      <p class="set-text">Hafta sonu veya resmî tatile denk gelen ödeme ilk iş gününe kayar. Her ödeme için ekleme ekranından ayrıca açıp kapatabilirsin. Bayram tarihleri 2026 ve 2027 için tanımlı.</p>
+    </div></section>
+    <section class="section"><h2><span>Yedek</span></h2><div class="set">
+      <p class="set-text">Veriler sadece bu telefonda durur. Ara sıra yedek alıp Dosyalar'a ya da iCloud Drive'a kaydet. Son yedek: <b>${lb}</b>.</p>
+      <button type="button" class="set-row link" data-action="backup-download">Yedeği indir (.json)</button>
+      <button type="button" class="set-row link" data-action="backup-copy">Yedeği metin olarak kopyala</button>
+      <button type="button" class="set-row link" data-action="restore-file">Dosyadan geri yükle</button>
+      <button type="button" class="set-row link" data-action="restore-paste">Metinden geri yükle</button>
+    </div></section>
+    <section class="section"><h2><span>Ana ekrana ekle</span></h2><div class="set">
+      <div class="set-text">Uygulamayı Safari'de aç ve:<ol><li>Alttaki Paylaş düğmesine dokun.</li><li>“Ana Ekrana Ekle”yi seç.</li><li>Ana ekrandaki “Ödemeler” ikonundan aç.</li></ol></div>
+    </div></section>
+    <section class="section"><h2><span>Veriler</span></h2><div class="set">
+      <p class="set-text">${state.items.length} ödeme, ${state.payments.length} ödeme kaydı.</p>
+      ${state.sample ? `<button type="button" class="set-row link" data-action="clear-sample">Örnek verileri sil</button>` : ''}
+      <button type="button" class="set-row danger" data-action="wipe">Tüm verileri sil</button>
+    </div></section>
+    <p class="note">Ödeme Defteri ${VERSION} · kişisel kullanım</p>
+  </div>`;
+}
+
+function renderTabs() {
+  const t = (id, label, icon) => `<button type="button" class="tab" data-action="tab" data-tab="${id}"${view === id ? ' aria-current="page"' : ''}>${icon}<span>${label}</span></button>`;
+  document.getElementById('tabs').innerHTML = t('month', 'Bu Ay', IC.tabMonth) + t('debts', 'Borçlar', IC.tabDebt) + t('settings', 'Ayarlar', IC.tabSet);
+  document.getElementById('fab').innerHTML = IC.plus;
+}
+function render() {
+  app.innerHTML = view === 'month' ? monthView() : view === 'debts' ? debtsView() : settingsView();
+  renderTabs();
+  if (sheet && sheet.type === 'item') renderSheet();
+}
+
+/* ---------- sheets ---------- */
+function openSheet(s) { sheet = s; renderSheet(true); }
+function closeSheet() { sheet = null; sheetRoot.classList.remove('open'); sheetRoot.innerHTML = ''; document.body.classList.remove('locked'); }
+function renderSheet(fresh) {
+  let html = '';
+  if (sheet.type === 'item') html = itemSheet(sheet.id, sheet.p);
+  else if (sheet.type === 'form') html = formSheet(sheet);
+  else if (sheet.type === 'balance') html = balanceSheet(sheet.p);
+  else if (sheet.type === 'text') html = textSheet(sheet);
+  if (html == null) return closeSheet();
+  const prevScroll = !fresh && sheetRoot.querySelector('.sheet') ? sheetRoot.querySelector('.sheet').scrollTop : 0;
+  sheetRoot.innerHTML = `<button type="button" class="backdrop" data-action="close-sheet" aria-label="Kapat"></button><div class="sheet" role="dialog" aria-modal="true"${fresh ? '' : ' style="animation:none"'}><div class="grab"></div>${html}</div>`;
+  sheetRoot.classList.add('open');
+  document.body.classList.add('locked');
+  const sh = sheetRoot.querySelector('.sheet');
+  sh.scrollTop = prevScroll;
+  const fm = sh.querySelector('form[data-form="item"]'); if (fm) syncForm(fm);
+  if (fresh && sheet.focus) { const el = sh.querySelector(sheet.focus); if (el) setTimeout(() => el.focus(), 50); }
+}
+const head = (title, sub, icon) => `<div class="sheet-head">${icon ? `<span class="ico">${icon}</span>` : ''}<div class="mid"><h3>${title}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}</div><button type="button" class="closebtn" data-action="close-sheet" aria-label="Kapat">${IC.x}</button></div>`;
+
+function itemSheet(id, P) {
+  const it = byId(id);
+  if (!it) return null;
+  const o = occ(it, P);
+  const open = sheet.open || '';
+  let h = head(esc(it.name), `${KIND_LABEL[it.kind]}${it.kind === 'recurring' ? ' · ' + (CATS.find(c => c[0] === it.cat) || ['', 'Diğer'])[1] : ''}`, iconFor(it));
+
+  if (it.kind === 'loan') {
+    const left = Math.max(0, loanLeft(it)); const paid = r2(it.total - left);
+    const n = left > 0 ? Math.ceil(left / it.installment - 1e-9) : 0;
+    h += `<div class="card"><div class="kv"><div><span>Kalan borç</span><b>${money(left)}</b></div><div><span>Ödenen</span><b class="pos">${money(paid)}</b></div><div><span>Toplam</span><b>${money(it.total)}</b></div></div>
+      <div class="prog"><i style="width:${(it.total > 0 ? paid / it.total * 100 : 0).toFixed(1)}%"></i></div>
+      <div class="duebox">${n ? `Yaklaşık <b>${n} taksit</b> kaldı. Fazladan ödeme yaparsan kalan borç da o kadar düşer.` : '<b>Bu kredi kapandı.</b>'}</div></div>`;
+  }
+
+  if (o) {
+    const dateLine = `${o.past ? '' : ''}Son ödeme: <b>${fmtDay.format(o.date)}</b>${o.shifted ? ` (${fmtDay.format(o.base)} tatil/hafta sonu olduğu için ertelendi)` : ''} · ${o.status === 'paid' ? 'ödendi' : o.status === 'minpaid' ? 'asgari ödendi' : dueText(o).toLowerCase()}`;
+    h += `<div class="card"><div class="duebox">${monthLabel(P)} · ${dateLine}</div>`;
+    if (o.needs) {
+      h += `<div class="duebox">Bu ayın ekstre borcunu ve asgari tutarını gir. Kalan borç ve bakiye hesabı buna göre yapılır.</div>`;
+    } else {
+      h += `<div class="kv"><div><span>${it.kind === 'card' ? 'Ekstre' : 'Tutar'}</span><b>${money(o.due)}</b></div><div><span>Ödenen</span><b class="pos">${money(o.paid)}</b></div><div><span>Kalan</span><b class="${o.remaining > 0 && o.status === 'overdue' ? 'neg' : ''}">${money(o.skipped ? 0 : o.remaining)}</b></div></div>`;
+      if (o.min != null) h += `<div class="duebox">Asgari ödeme: <b>${money(o.min)}</b>${o.minLeft > 0 ? ` · asgari için <b>${money(o.minLeft)}</b> kaldı` : ' · asgari karşılandı'}</div>`;
+      if (o.due > 0) h += `<div class="prog"><i style="width:${Math.min(100, o.paid / o.due * 100).toFixed(1)}%"></i></div>`;
+    }
+    h += `</div>`;
+
+    // actions
+    h += `<div class="btns">`;
+    if (o.needs) {
+      h += statementForm(it, P, null);
+    } else if (!o.skipped && o.remaining > 0.004) {
+      h += `<button type="button" class="btn primary" data-action="pay" data-id="${esc(it.id)}" data-p="${P}" data-amt="${o.remaining}">Tamamını öde · <span class="num">${money(o.remaining)}</span></button>`;
+      if (o.min != null && o.minLeft > 0.004 && o.minLeft < o.remaining - 0.004) h += `<button type="button" class="btn secondary" data-action="pay" data-id="${esc(it.id)}" data-p="${P}" data-amt="${o.minLeft}">Asgariyi öde · <span class="num">${money(o.minLeft)}</span></button>`;
+      h += open === 'pay' ? payForm(it, P, o) : `<button type="button" class="btn secondary" data-action="sheet-open" data-open="pay">Farklı tutar öde (kısmi)</button>`;
+    } else if (!o.skipped) {
+      h += open === 'pay' ? payForm(it, P, o) : `<button type="button" class="btn quiet" data-action="sheet-open" data-open="pay">Ek ödeme kaydet</button>`;
+    }
+    if (it.kind === 'card' && !o.needs) h += open === 'statement' ? statementForm(it, P, it.statements[P]) : `<button type="button" class="btn quiet" data-action="sheet-open" data-open="statement">${monthName(parseYM(P).m)} ekstresini düzenle</button>`;
+    if (it.kind === 'recurring' && !o.skipped) h += open === 'override' ? overrideForm(it, P, o) : `<button type="button" class="btn quiet" data-action="sheet-open" data-open="override">Bu ayki tutarı değiştir</button>`;
+    if (it.kind === 'recurring' && o.paid <= 0) h += o.skipped ? `<button type="button" class="btn quiet" data-action="unskip" data-id="${esc(it.id)}" data-p="${P}">Atlamayı geri al</button>` : `<button type="button" class="btn quiet" data-action="skip" data-id="${esc(it.id)}" data-p="${P}">Bu ay ödeme yok (atla)</button>`;
+    h += `</div>`;
+  } else {
+    h += `<div class="card"><div class="duebox">${monthLabel(P)} için bu ödemenin taksiti veya son ödeme günü yok.</div></div>`;
+  }
+
+  // history
+  const hist = paysOf(it.id).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 15);
+  if (hist.length) {
+    h += `<section class="section"><h2><span>Ödeme geçmişi</span></h2><div class="card hist" style="padding:4px 14px">` + hist.map(p => `
+      <div class="hist-row"><span class="mid"><b class="num">${money(p.amount)}</b><div class="sub">${fmtDate.format(new Date(p.at))} · ${monthLabel(p.period)} için${p.deduct === false ? ' · bakiyeden düşülmedi' : ''}</div></span>
+      <button type="button" class="x" data-action="del-payment" data-pid="${esc(p.id)}">Sil</button></div>`).join('') + `</div></section>`;
+  }
+
+  h += `<div class="foot-actions">
+    <button type="button" class="btn secondary" data-action="export-ics-item" data-id="${esc(it.id)}">Takvime ekle</button>
+    <button type="button" class="btn secondary" data-action="edit" data-id="${esc(it.id)}">Düzenle</button>
+    <button type="button" class="btn danger" data-action="delete-item" data-id="${esc(it.id)}">Sil</button>
+  </div>`;
+  return h;
+}
+function payForm(it, P, o) {
+  return `<form class="card" data-form="pay" novalidate>
+    <input type="hidden" name="id" value="${esc(it.id)}"><input type="hidden" name="p" value="${P}">
+    <div class="two">
+      <div class="field"><label for="pay-amt">Ödenen tutar (₺)</label><input id="pay-amt" name="amount" inputmode="decimal" autocomplete="off" placeholder="${numVal(o.remaining || o.due)}"><span class="err" data-err="amount"></span></div>
+      <div class="field"><label for="pay-date">Tarih</label><input id="pay-date" name="date" type="date" value="${ymdOf(new Date())}"></div>
+    </div>
+    <label class="check"><input type="checkbox" name="deduct" checked> Bakiyemden düş</label>
+    <button class="btn primary" type="submit">Ödemeyi kaydet</button>
+  </form>`;
+}
+function statementForm(it, P, st) {
+  return `<form class="card" data-form="statement" novalidate>
+    <input type="hidden" name="id" value="${esc(it.id)}"><input type="hidden" name="p" value="${P}">
+    <div class="two">
+      <div class="field"><label for="st-amt">${monthName(parseYM(P).m)} ekstre borcu (₺)</label><input id="st-amt" name="amount" inputmode="decimal" autocomplete="off" value="${st ? numVal(st.amount) : ''}" placeholder="0,00"><span class="err" data-err="amount"></span></div>
+      <div class="field"><label for="st-min">Asgari ödeme (₺)</label><input id="st-min" name="min" inputmode="decimal" autocomplete="off" value="${st && st.min != null ? numVal(st.min) : ''}" placeholder="Boş bırakılabilir"><span class="err" data-err="min"></span></div>
+    </div>
+    <button class="btn primary" type="submit">Ekstreyi kaydet</button>
+  </form>`;
+}
+function overrideForm(it, P, o) {
+  return `<form class="card" data-form="override" novalidate>
+    <input type="hidden" name="id" value="${esc(it.id)}"><input type="hidden" name="p" value="${P}">
+    <div class="field"><label for="ov-amt">${monthLabel(P)} tutarı (₺)</label><input id="ov-amt" name="amount" inputmode="decimal" autocomplete="off" value="${numVal(o.due)}"><span class="hint">Sadece bu ayı değiştirir. Fatura gibi her ay farklı gelen ödemeler için.</span><span class="err" data-err="amount"></span></div>
+    <button class="btn primary" type="submit">Kaydet</button>
+  </form>`;
+}
+
+function formSheet(s) {
+  const it = s.id ? byId(s.id) : null;
+  const cur = curYM();
+  let name = '', amount = '', date = ymdOf(new Date()), card = false, min = '', repeat = false, freq = 'monthly', count = '', cal = !inFrame, shift = !!state.settings.shift, notify = true, time = `${pad(state.settings.hour)}:00`, paidNote = '';
+  if (it) {
+    name = it.name; card = it.kind === 'card'; repeat = it.kind !== 'once'; freq = it.freq || 'monthly';
+    notify = it.notify !== false; time = it.notifyTime || time; cal = false; shift = it.kind === 'once' ? shift : shiftOn(it);
+    if (it.kind === 'once') { amount = it.amount; date = it.date; }
+    else {
+      let Q = it.start > cur ? it.start : cur;
+      if (it.kind === 'recurring' && it.freq === 'yearly') { Q = it.start; let g = 0; while (parseYM(Q).m !== Number(it.month) && g++ < 12) Q = addM(Q, 1); while (Q < cur) Q = addM(Q, 12); }
+      if (it.kind === 'loan') {
+        const o = occ(it, Q); if (o && o.remaining <= 0.004 && Q === cur) Q = addM(Q, 1);
+        amount = it.installment; const left = loanLeft(it); count = left > 0 ? Math.ceil(left / it.installment - 1e-9) : '';
+        const paid = paidIn(it.id); if (paid > 0) paidNote = `Şimdiye kadar ${money(paid)} ödendi. Taksit sayısı, kalan taksitleri gösterir.`;
+      }
+      const { y, m } = parseYM(Q); date = ymdOf(new Date(y, m - 1, Math.min(it.dueDay, dim(y, m))));
+      if (it.kind === 'recurring') amount = it.amount;
+      if (it.kind === 'card') { const st = it.statements && it.statements[Q]; if (st) { amount = st.amount; min = st.min ?? ''; } }
+    }
+  }
+  const sw = (n, on, color, dis) => `<input type="checkbox" class="switch ${color}" role="switch" name="${n}" id="f-${n}"${on ? ' checked' : ''}${dis ? ' disabled' : ''}>`;
+  return `<form class="iform" data-form="item" novalidate>
+    <input type="hidden" name="id" value="${it ? esc(it.id) : ''}">
+    <div class="ihead"><button type="button" class="pillbtn" data-action="close-sheet">İptal</button><h3>${it ? 'Ödemeyi Düzenle' : 'Yeni Ödeme Ekle'}</h3><button type="submit" class="pillbtn strong">Kaydet</button></div>
+    <p class="ierr" data-err="form" role="alert"></p>
+    <div class="group">
+      <input class="gin" name="name" id="f-name" autocomplete="off" aria-label="Ödeme adı" placeholder="Ödeme adı (örn. Maaş kartı)" value="${esc(name)}">
+      <input class="gin num" name="amount" id="f-amount" inputmode="decimal" autocomplete="off" aria-label="Tutar" placeholder="Tutar (₺)" value="${numVal(amount)}">
+      <label class="grow date-row" data-action="pick-date"><span class="gico blue">${IC.tek}</span><span class="glab acc" data-date-label>Tarih</span><span class="gval" data-date-text></span><input type="date" name="date" id="f-date" value="${esc(date)}" aria-label="Tarih"></label>
+    </div>
+    <h4 class="ghead">Detaylar</h4>
+    <div class="group">
+      <label class="grow" for="f-card"><span class="gico violet">${IC.kart}</span><span class="glab">Kredi kartı ekstresi</span>${sw('card', card, 'violet')}</label>
+      <label class="grow sub" data-show="card" for="f-min"><span class="glab">Asgari ödeme</span><input class="gin-r num" name="min" id="f-min" inputmode="decimal" autocomplete="off" placeholder="İsteğe bağlı" value="${numVal(min)}"></label>
+    </div>
+    <p class="gnote" data-show="card">Tutar, bu dönemin ekstre borcu. Sonraki aylarda yeni ekstreyi kartın ekranından girersin.</p>
+    <h4 class="ghead">Ayarlar</h4>
+    <div class="group">
+      <label class="grow" for="f-repeat"><span class="gico blue">${IC.abonelik}</span><span class="glab">Tekrarlı ödeme</span>${sw('repeat', repeat, 'blue')}</label>
+      <label class="grow sub" data-show="repeat" for="f-freq"><span class="glab">Tekrar</span><select class="gin-r" name="freq" id="f-freq"><option value="monthly"${freq === 'monthly' ? ' selected' : ''}>Her ay</option><option value="yearly"${freq === 'yearly' ? ' selected' : ''}>Her yıl</option></select></label>
+      <label class="grow sub" data-show="installments" for="f-count"><span class="glab">Kaç taksit</span><input class="gin-r num" type="number" name="count" id="f-count" inputmode="numeric" min="1" max="600" placeholder="Süresiz" value="${esc(count)}"></label>
+      <label class="grow sub" data-show="shift" for="f-shift"><span class="glab">İş gününe ertele</span>${sw('shift', shift, 'blue')}</label>
+      <label class="grow" for="f-cal"><span class="gico green">${IC.tabMonth}</span><span class="glab">Takvime ekle</span>${sw('cal', cal, 'blue')}</label>
+      <label class="grow" for="f-notify"><span class="gico orange">${IC.bell}</span><span class="glab">Bildirim ekle</span>${sw('notify', notify, 'orange')}</label>
+      <label class="grow sub" data-show="notify" for="f-time"><span class="glab nowrap">Bildirim saati</span><input class="timepill num" type="time" name="time" id="f-time" value="${esc(time)}"></label>
+    </div>
+    <p class="gnote" data-summary></p>
+    ${paidNote ? `<p class="gnote">${paidNote}</p>` : ''}
+  </form>`;
+}
+function syncForm(f) {
+  const g = n => f.elements[n];
+  const card = g('card').checked, rep = g('repeat');
+  if (card) { rep.checked = true; rep.disabled = true; } else rep.disabled = false;
+  const repeat = rep.checked, freq = g('freq').value;
+  const show = { card, shift: repeat, repeat: repeat && !card, installments: repeat && !card && freq === 'monthly', notify: g('notify').checked };
+  f.querySelectorAll('[data-show]').forEach(el => el.classList.toggle('hidden', !show[el.dataset.show]));
+  const countV = show.installments ? (Number(g('count').value) || 0) : 0;
+  const amt = parseMoney(g('amount').value);
+  g('amount').placeholder = card ? 'Bu dönemin ekstre borcu (₺)' : countV ? 'Aylık taksit tutarı (₺)' : 'Tutar (₺)';
+  const dv = g('date').value, d = dv ? new Date(dv + 'T00:00:00') : null;
+  f.querySelector('[data-date-text]').textContent = d ? fmtLong.format(d) : 'Seç';
+  f.querySelector('[data-date-label]').textContent = card ? 'Son ödeme tarihi' : repeat ? 'İlk ödeme tarihi' : 'Tarih';
+  let s = '';
+  if (d) {
+    const day = d.getDate();
+    if (card) s = `Her ayın ${day}. günü son ödeme günü olarak tekrarlar.`;
+    else if (!repeat) s = `Tek seferlik ödeme, ${fmtLong.format(d)}.`;
+    else if (freq === 'yearly') s = `Her yıl ${day} ${monthName(d.getMonth() + 1)} tarihinde tekrarlar.`;
+    else if (countV > 0) s = `${countV} taksit${amt > 0 ? ` × ${money(amt)} = ${money(r2(amt * countV))} toplam borç` : ''}. Son taksit ${monthLabel(addM(dv.slice(0, 7), countV - 1))}.`;
+    else s = `Her ayın ${day}. günü, süresiz tekrarlar.`;
+    if (repeat && day > 28) s += ' Kısa aylarda ayın son gününe kayar.';
+    if (repeat && g('shift').checked) s += ' Hafta sonu veya resmî tatile denk gelirse ilk iş gününe kayar.';
+  }
+  if (!g('id').value && !g('cal').checked && g('notify').checked) s += ' Bildirim iPhone Takvim’i üzerinden gelir, “Takvime ekle” kapalıyken gelmez.';
+  f.querySelector('[data-summary]').textContent = s;
+}
+
+function balanceSheet(P) {
+  const bal = balanceInfo(P);
+  let h = head(`${monthLabel(P)} bakiyesi`, 'Hesabındaki TL tutarı');
+  h += `<form class="card" data-form="balance" novalidate>
+    <input type="hidden" name="p" value="${P}">
+    <div class="field"><label for="b-amt">Şu anki bakiyem (₺)</label><input id="b-amt" name="amount" inputmode="decimal" autocomplete="off" value="${bal ? numVal(bal.current) : ''}" placeholder="0,00"><span class="err" data-err="amount"></span>
+    <span class="hint">Bundan sonra kaydettiğin ödemeler (“Bakiyemden düş” açıksa) bu tutardan otomatik düşülür. Maaş yatınca ya da bakiye değişince buradan güncelle.</span></div>
+    <button class="btn primary" type="submit">Kaydet</button>
+    ${bal ? `<button class="btn quiet" type="button" data-action="balance-clear" data-p="${P}">Bu ayın bakiyesini kaldır</button>` : ''}
+  </form>`;
+  if (bal) h += `<div class="card"><div class="kv"><div><span>Girilen</span><b>${money(bal.set)}</b></div><div><span>Sonra ödenen</span><b>${money(bal.spent)}</b></div><div><span>Şu an</span><b>${money(bal.current)}</b></div></div><div class="duebox">Girilme zamanı: ${fmtDate.format(new Date(bal.at))}</div></div>`;
+  return h;
+}
+
+function textSheet(s) {
+  if (s.mode === 'copy') return head('Yedek metni', 'Kopyalayıp Notlar’a ya da bir dosyaya yapıştır') + `<div class="card"><textarea class="copybox" readonly id="copy-text">${esc(s.text)}</textarea><button class="btn primary" type="button" data-action="copy-again">Kopyala</button></div>`;
+  if (s.mode === 'paste') return head('Metinden geri yükle', 'Daha önce kopyaladığın yedek metnini yapıştır') + `<form class="card" data-form="restore" novalidate><div class="field"><label for="r-text">Yedek metni</label><textarea id="r-text" name="text" placeholder='{"version":1, ...}'></textarea><span class="err" data-err="text"></span></div><div class="duebox"><b>Dikkat:</b> Şu anki tüm verilerin yedekteki verilerle değiştirilir.</div><button class="btn primary" type="submit">Geri yükle</button></form>`;
+  if (s.mode === 'confirm-restore') return head('Yedeği yükle', `${s.data.items.length} ödeme, ${s.data.payments.length} ödeme kaydı bulundu`) + `<div class="card"><div class="duebox">Şu anki verilerin bu yedekle değiştirilecek. Emin misin?</div><button class="btn primary" type="button" data-action="restore-confirm">Evet, yükle</button><button class="btn quiet" type="button" data-action="close-sheet">Vazgeç</button></div>`;
+  if (s.mode === 'info') return head(s.title, '') + `<div class="card"><div class="duebox">${s.text}</div><button class="btn primary" type="button" data-action="close-sheet">Tamam</button></div>`;
+  return null;
+}
+
+/* ---------- mutations ---------- */
+function snapshot() { undoSnap = JSON.stringify(state); }
+function commit(msg, undoable) { save(); render(); if (msg) toast(msg, undoable); }
+let toastTimer = null;
+function toast(msg, undoable) {
+  const t = document.getElementById('toast');
+  t.innerHTML = `<span>${esc(msg)}</span>${undoable ? '<button type="button" data-action="undo">Geri al</button>' : ''}`;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), undoable ? 6000 : 3000);
+}
+function setErr(form, name, msg) { const el = form.querySelector(`[data-err="${name}"]`); if (el) el.textContent = msg; const inp = form.querySelector(`[name="${name}"]`); if (inp && msg) inp.focus(); return false; }
+function clearErrs(form) { form.querySelectorAll('[data-err]').forEach(e => e.textContent = ''); }
+
+function addPayment(id, P, amount, at, deduct) {
+  snapshot();
+  state.payments.push({ id: uid(), itemId: id, period: P, amount: r2(amount), at: at || localISO(new Date()), deduct: deduct !== false });
+  sheet && (sheet.open = '');
+  commit(`${money(amount)} ödeme kaydedildi`, true);
+}
+
+const forms = {
+  pay(f) {
+    const fd = new FormData(f);
+    let amt = parseMoney(fd.get('amount'));
+    if (!(amt > 0)) return setErr(f, 'amount', 'Ödediğin tutarı yaz.');
+    const d = fd.get('date');
+    const now = new Date();
+    const at = !d || d === ymdOf(now) ? localISO(now) : `${d}T12:00:00`;
+    addPayment(fd.get('id'), fd.get('p'), amt, at, fd.get('deduct') === 'on');
+  },
+  statement(f) {
+    const fd = new FormData(f);
+    const amt = parseMoney(fd.get('amount'));
+    if (!(amt >= 0)) return setErr(f, 'amount', 'Ekstre tutarını yaz.');
+    const minRaw = String(fd.get('min') || '').trim();
+    const min = minRaw ? parseMoney(minRaw) : null;
+    if (minRaw && !(min >= 0)) return setErr(f, 'min', 'Geçerli bir tutar yaz.');
+    if (min != null && min > amt) return setErr(f, 'min', 'Asgari, ekstre borcundan büyük olamaz.');
+    const it = byId(fd.get('id'));
+    snapshot();
+    it.statements = it.statements || {};
+    it.statements[fd.get('p')] = { amount: amt, min };
+    sheet.open = '';
+    commit('Ekstre kaydedildi', true);
+  },
+  override(f) {
+    const fd = new FormData(f);
+    const amt = parseMoney(fd.get('amount'));
+    if (!(amt >= 0)) return setErr(f, 'amount', 'Geçerli bir tutar yaz.');
+    const it = byId(fd.get('id'));
+    snapshot();
+    if (Math.abs(amt - it.amount) < 0.005) delete it.overrides[fd.get('p')]; else it.overrides[fd.get('p')] = amt;
+    sheet.open = '';
+    commit('Bu ayın tutarı güncellendi', true);
+  },
+  balance(f) {
+    const fd = new FormData(f);
+    const amt = parseMoney(fd.get('amount'));
+    if (Number.isNaN(amt)) return setErr(f, 'amount', 'Bakiyeni yaz. Eksideysen başına - koy.');
+    snapshot();
+    state.balances[fd.get('p')] = { amount: amt, at: localISO(new Date()) };
+    closeSheet();
+    commit('Bakiye kaydedildi', true);
+  },
+  item(f) {
+    const fd = new FormData(f);
+    const err = m => { setErr(f, 'form', m); const sh = sheetRoot.querySelector('.sheet'); if (sh) sh.scrollTop = 0; return false; };
+    const id = fd.get('id');
+    const it0 = id ? byId(id) : null;
+    const name = String(fd.get('name') || '').trim();
+    if (!name) return err('Ödemeye bir ad ver.');
+    const card = fd.get('card') === 'on';
+    const repeat = card || fd.get('repeat') === 'on';
+    const freq = card ? 'monthly' : (fd.get('freq') || 'monthly');
+    const countRaw = String(fd.get('count') || '').trim();
+    const count = repeat && !card && freq === 'monthly' && countRaw ? Number(countRaw) : null;
+    if (count != null && !(Number.isInteger(count) && count >= 1 && count <= 600)) return err('Taksit sayısı 1 ile 600 arasında bir tam sayı olmalı.');
+    const date = fd.get('date');
+    if (!date) return err('Tarih seç.');
+    const amtRaw = String(fd.get('amount') || '').trim();
+    const amt = parseMoney(amtRaw);
+    const kind = card ? 'card' : !repeat ? 'once' : count ? 'loan' : 'recurring';
+    let stmt = null;
+    if (kind === 'card') {
+      const minRaw = String(fd.get('min') || '').trim();
+      const mn = minRaw ? parseMoney(minRaw) : null;
+      if (amtRaw && !(amt >= 0)) return err('Ekstre tutarını doğru yaz (örn. 18.450,00).');
+      if (minRaw && !(mn >= 0)) return err('Asgari tutarı doğru yaz.');
+      if (minRaw && !amtRaw) return err('Asgariyi girdiysen ekstre tutarını da yaz.');
+      if (mn != null && mn > amt) return err('Asgari ödeme, ekstre borcundan büyük olamaz.');
+      if (amtRaw) stmt = { amount: amt, min: mn };
+    } else if (!(amt > 0)) return err('Tutarı yaz (örn. 1.250,00).');
+    const d = new Date(date + 'T00:00:00');
+    const P = date.slice(0, 7);
+    let start = P;
+    if (it0 && it0.start && paysOf(it0.id).length) start = it0.start < P ? it0.start : P;
+    const upd = { name, kind, notify: fd.get('notify') === 'on', notifyTime: fd.get('time') || `${pad(state.settings.hour)}:00` };
+    if (kind === 'once') Object.assign(upd, { amount: amt, date });
+    else Object.assign(upd, { dueDay: d.getDate(), start, shift: fd.get('shift') === 'on' });
+    if (kind === 'recurring') Object.assign(upd, { amount: amt, freq, month: d.getMonth() + 1, cat: (it0 && it0.cat) || 'diger' });
+    if (kind === 'loan') {
+      let total = r2(amt * count);
+      if (it0 && it0.kind === 'loan') {
+        const left = loanLeft(it0);
+        const sameCount = Math.ceil(left / it0.installment - 1e-9) === count;
+        total = Math.abs(it0.installment - amt) < 0.005 && sameCount ? it0.total : r2(paidIn(it0.id) + amt * count);
+      }
+      Object.assign(upd, { installment: amt, total });
+    }
+    snapshot();
+    const it = it0 || { id: uid(), overrides: {}, skips: [] };
+    Object.assign(it, upd);
+    if (kind === 'card') { it.statements = it.statements || {}; if (stmt) it.statements[P] = stmt; }
+    if (!it0) state.items.push(it);
+    closeSheet();
+    const wantCal = fd.get('cal') === 'on';
+    let msg = it0 ? 'Değişiklikler kaydedildi' : `${name} eklendi`;
+    if (wantCal) {
+      if (inFrame) msg += ' (takvim önizlemede çalışmaz)';
+      else { const { text, count: c } = buildICS([it]); if (c) { download(`${fileSlug(name)}.ics`, text, 'text/calendar'); msg += ', takvim dosyası indirildi'; } }
+    }
+    commit(msg, true);
+  },
+  restore(f) {
+    const fd = new FormData(f);
+    const data = parseBackup(String(fd.get('text') || ''));
+    if (!data) return setErr(f, 'text', 'Bu metin geçerli bir yedek değil. Tamamını kopyaladığından emin ol.');
+    openSheet({ type: 'text', mode: 'confirm-restore', data });
+  }
+};
+
+function parseBackup(text) {
+  try {
+    const o = JSON.parse(text.trim());
+    if (!o || !Array.isArray(o.items) || !Array.isArray(o.payments)) return null;
+    return normalize(o);
+  } catch (e) { return null; }
+}
+
+/* ---------- calendar (.ics) ---------- */
+function icsEsc(s) { return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n'); }
+function icsDT(d, h, mi) { return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(h)}${pad(mi || 0)}00`; }
+function eventLines(it, stamp) {
+  const [h, mi] = (it.notifyTime || `${pad(Number(state.settings.hour) || 9)}:00`).split(':').map(Number);
+  const cur = curYM();
+  let first, rrule = null, title, desc;
+  if (it.kind === 'once') {
+    if (!it.date || it.amount - paidIn(it.id) <= 0.004) return [];
+    first = new Date(it.date + 'T00:00:00');
+    title = `${it.name} ödemesi`;
+    desc = `Tutar: ${money(it.amount)}`;
+  } else {
+    let P = it.start > cur ? it.start : cur;
+    if (it.kind === 'recurring' && it.freq === 'yearly') { let g = 0; while (parseYM(P).m !== Number(it.month) && g < 12) { P = addM(P, 1); g++; } }
+    const d = it.dueDay;
+    const bymd = d <= 28 ? `BYMONTHDAY=${d}` : `BYMONTHDAY=${Array.from({ length: d - 27 }, (_, i) => 28 + i).join(',')};BYSETPOS=-1`;
+    if (it.kind === 'loan') {
+      const left = loanLeft(it);
+      if (left <= 0.004) return [];
+      const o = occ(it, P);
+      if (!o || o.remaining <= 0.004) P = addM(P, 1);
+      const n = Math.ceil(left / it.installment - 1e-9);
+      rrule = `RRULE:FREQ=MONTHLY;${bymd};COUNT=${n}`;
+      title = `${it.name} taksiti`;
+      desc = `Taksit: ${money(it.installment)}. Kalan borç: ${money(left)}.`;
+    } else if (it.kind === 'card') {
+      rrule = `RRULE:FREQ=MONTHLY;${bymd}`;
+      title = `${it.name} son ödeme günü`;
+      desc = 'Ekstre ve asgari tutarını Ödeme Defteri’ne girmeyi unutma.';
+    } else {
+      rrule = it.freq === 'yearly' ? `RRULE:FREQ=YEARLY;BYMONTH=${it.month};${bymd}` : `RRULE:FREQ=MONTHLY;${bymd}`;
+      title = `${it.name} ödemesi`;
+      desc = `Tutar: ${money(it.amount)}`;
+    }
+    const { y, m } = parseYM(P);
+    first = new Date(y, m - 1, Math.min(d, dim(y, m)));
+  }
+  const alarms = () => {
+    const A = [];
+    if (it.notify !== false) A.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsEsc(title)}`, 'TRIGGER:PT0M', 'END:VALARM');
+    if (it.notify !== false && state.settings.dayBefore) A.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsEsc('Yarın: ' + title)}`, 'TRIGGER:-P1D', 'END:VALARM');
+    return A;
+  };
+  const ev = (uidPart, day, rr) => ['BEGIN:VEVENT', `UID:${uidPart}@odeme-defteri`, `DTSTAMP:${stamp}`, `DTSTART:${icsDT(day, h, mi)}`, 'DURATION:PT15M', `SUMMARY:${icsEsc(title)}`, `DESCRIPTION:${icsEsc(desc)}`, ...(rr ? [rr] : []), ...alarms(), 'END:VEVENT'];
+  if (rrule && shiftOn(it)) {
+    // Calendars cannot express "next working day" in a repeat rule, so list each date on its real (shifted) day.
+    const cm = rrule.match(/COUNT=(\d+)/);
+    const limit = cm ? Number(cm[1]) : (it.freq === 'yearly' ? 5 : 36);
+    const step = it.freq === 'yearly' && it.kind === 'recurring' ? 12 : 1;
+    const out = [];
+    let P = ymOf(first);
+    for (let k = 0; k < limit; k++, P = addM(P, step)) {
+      const di = dueInfo(it, P);
+      if (di) out.push(...ev(`${it.id}-${P}`, di.date, null));
+    }
+    return out;
+  }
+  return ev(it.id, first, rrule);
+}
+function buildICS(items) {
+  const n = new Date();
+  const stamp = `${n.getUTCFullYear()}${pad(n.getUTCMonth() + 1)}${pad(n.getUTCDate())}T${pad(n.getUTCHours())}${pad(n.getUTCMinutes())}${pad(n.getUTCSeconds())}Z`;
+  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Odeme Defteri//TR', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
+  let count = 0;
+  for (const it of items) { const e = eventLines(it, stamp); if (e.length) { L.push(...e); count++; } }
+  L.push('END:VCALENDAR');
+  return { text: L.join('\r\n') + '\r\n', count };
+}
+
+/* ---------- files ---------- */
+function previewBlocked(what) {
+  if (!inFrame) return false;
+  openSheet({ type: 'text', mode: 'info', title: 'Önizlemede çalışmaz', text: `${what} bu önizleme penceresinde engelli. Uygulamayı kendi adresinde (ana ekrana eklediğin hâlinde) açınca çalışır.` });
+  return true;
+}
+function download(name, text, type) {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+function backupText() { return JSON.stringify(Object.assign({}, state, { exportedAt: localISO(new Date()), app: 'odeme-defteri' }), null, 1); }
+function markBackup() { state.settings.lastBackup = localISO(new Date()); save(); render(); }
+
+/* ---------- actions ---------- */
+const actions = {
+  'close-sheet': () => closeSheet(),
+  tab: el => { view = el.dataset.tab; closeSheet(); render(); window.scrollTo(0, 0); },
+  'nav-month': el => { viewP = addM(viewP, Number(el.dataset.d)); render(); },
+  'nav-today': () => { viewP = curYM(); render(); },
+  add: () => openSheet({ type: 'form', focus: '#f-name' }),
+  'pick-date': (el, e) => { const i = el.querySelector('input[type=date]'); if (e.target === i) return; try { i.showPicker(); } catch (x) { i.focus(); i.click(); } },
+  edit: el => openSheet({ type: 'form', id: el.dataset.id }),
+  'open-item': el => openSheet({ type: 'item', id: el.dataset.id, p: el.dataset.p }),
+  'sheet-open': el => { sheet.open = el.dataset.open; renderSheet(); const i = sheetRoot.querySelector('form input:not([type=hidden])'); if (i) i.focus(); },
+  pay: el => addPayment(el.dataset.id, el.dataset.p, Number(el.dataset.amt), null, true),
+  skip: el => { snapshot(); const it = byId(el.dataset.id); it.skips = [...new Set([...(it.skips || []), el.dataset.p])]; commit('Bu ay atlandı', true); },
+  unskip: el => { snapshot(); const it = byId(el.dataset.id); it.skips = (it.skips || []).filter(p => p !== el.dataset.p); commit('Atlama geri alındı', true); },
+  'del-payment': el => { snapshot(); state.payments = state.payments.filter(p => p.id !== el.dataset.pid); commit('Ödeme kaydı silindi', true); },
+  'delete-item': el => {
+    if (!el.dataset.armed) { el.dataset.armed = '1'; el.textContent = 'Emin misin?'; setTimeout(() => { if (el.isConnected) { delete el.dataset.armed; el.textContent = 'Sil'; } }, 3500); return; }
+    snapshot();
+    const id = el.dataset.id; const name = byId(id)?.name || '';
+    state.items = state.items.filter(i => i.id !== id);
+    state.payments = state.payments.filter(p => p.itemId !== id);
+    closeSheet();
+    commit(`${name} silindi`, true);
+  },
+  balance: el => openSheet({ type: 'balance', p: el.dataset.p, focus: '#b-amt' }),
+  'balance-clear': el => { snapshot(); delete state.balances[el.dataset.p]; closeSheet(); commit('Bakiye kaldırıldı', true); },
+  undo: () => { if (!undoSnap) return; state = normalize(JSON.parse(undoSnap)); undoSnap = null; save(); render(); document.getElementById('toast').classList.remove('show'); },
+  'clear-sample': () => {
+    snapshot();
+    const ids = new Set(state.items.filter(i => i.sample).map(i => i.id));
+    state.items = state.items.filter(i => !i.sample);
+    state.payments = state.payments.filter(p => !ids.has(p.itemId));
+    for (const k of Object.keys(state.balances)) if (state.balances[k].sample) delete state.balances[k];
+    state.sample = false;
+    commit('Örnek veriler silindi', true);
+  },
+  wipe: el => {
+    if (!el.dataset.armed) { el.dataset.armed = '1'; el.textContent = 'Emin misin? Tekrar dokun, her şey silinecek'; setTimeout(() => { if (el.isConnected) { delete el.dataset.armed; el.textContent = 'Tüm verileri sil'; } }, 4000); return; }
+    snapshot();
+    const keep = state.settings;
+    state = defaults(); state.settings = keep;
+    commit('Tüm veriler silindi', true);
+  },
+  'export-ics': () => {
+    if (previewBlocked('Takvim dosyası indirme')) return;
+    const { text, count } = buildICS(state.items);
+    if (!count) return toast('Takvime eklenecek ödeme yok');
+    download('odemeler.ics', text, 'text/calendar');
+    toast(`${count} ödeme takvim dosyasına yazıldı`);
+  },
+  'export-ics-item': el => {
+    if (previewBlocked('Takvim dosyası indirme')) return;
+    const it = byId(el.dataset.id);
+    const { text, count } = buildICS([it]);
+    if (!count) return toast('Bu ödeme için gelecek tarih yok');
+    download(`${fileSlug(it.name)}.ics`, text, 'text/calendar');
+  },
+  'backup-download': () => {
+    if (previewBlocked('Yedek indirme')) return;
+    download(`odeme-defteri-yedek-${ymdOf(new Date())}.json`, backupText(), 'application/json');
+    markBackup();
+    toast('Yedek indirildi. Dosyalar’a kaydet.');
+  },
+  'backup-copy': async () => {
+    const text = backupText();
+    try { await navigator.clipboard.writeText(text); markBackup(); toast('Yedek panoya kopyalandı. Notlar’a yapıştırabilirsin.'); }
+    catch (e) { openSheet({ type: 'text', mode: 'copy', text }); setTimeout(() => { const t = document.getElementById('copy-text'); if (t) { t.focus(); t.select(); } }, 60); }
+  },
+  'copy-again': async () => {
+    const t = document.getElementById('copy-text');
+    try { await navigator.clipboard.writeText(t.value); markBackup(); toast('Kopyalandı'); } catch (e) { t.focus(); t.select(); toast('Metni seçip elle kopyala'); }
+  },
+  'restore-file': () => document.getElementById('file-input').click(),
+  'restore-paste': () => openSheet({ type: 'text', mode: 'paste', focus: '#r-text' }),
+  'restore-confirm': () => { snapshot(); state = normalize(sheet.data); closeSheet(); commit('Yedek yüklendi', true); }
+};
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const fn = actions[el.dataset.action];
+  if (fn) { if (!(el.dataset.action === 'pick-date' && e.target.matches('input'))) e.preventDefault(); fn(el, e); }
+});
+document.addEventListener('submit', e => {
+  const f = e.target.closest('form[data-form]');
+  if (!f) return;
+  e.preventDefault();
+  clearErrs(f);
+  forms[f.dataset.form] && forms[f.dataset.form](f);
+});
+document.addEventListener('change', e => {
+  const el = e.target;
+  if (el.form && el.form.dataset.form === 'item') { syncForm(el.form); return; }
+  const key = el.dataset.change;
+  if (!key) return;
+  if (key === 'hour') state.settings.hour = Number(el.value);
+  if (key === 'dayBefore') state.settings.dayBefore = el.checked;
+  if (key === 'shift') state.settings.shift = el.checked;
+  save(); render();
+});
+document.getElementById('file-input').addEventListener('change', async e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const data = parseBackup(await file.text());
+  if (!data) return toast('Bu dosya geçerli bir yedek değil');
+  openSheet({ type: 'text', mode: 'confirm-restore', data });
+});
+document.addEventListener('input', e => { const f = e.target.form; if (f && f.dataset.form === 'item') syncForm(f); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheet) closeSheet(); });
+
+// Re-render when the app comes back (dates and "x gün kaldı" stay fresh).
+let lastDay = ymdOf(new Date());
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  const d = ymdOf(new Date());
+  if (d !== lastDay) { if (viewP === lastDay.slice(0, 7)) viewP = d.slice(0, 7); lastDay = d; }
+  render();
+});
+
+if (!inFrame) {
+  try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) { }
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
+}
+
+render();
+window.__od = { state: () => state, monthData, occ, balanceInfo, buildICS, parseMoney };
+})();
+</script>
+</body>
+</html>
