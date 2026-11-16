@@ -259,6 +259,11 @@ select.gin-r{text-align:left;width:auto}
 .switch.blue:checked{background:#2F7BEA}.switch.orange:checked{background:#EE8420}.switch.violet:checked{background:#7457F2}
 .switch:disabled{opacity:.55}
 
+.from-right{animation:inR .24s ease-out}.from-left{animation:inL .24s ease-out}
+@keyframes inR{from{transform:translateX(36px);opacity:.4}to{transform:none;opacity:1}}
+@keyframes inL{from{transform:translateX(-36px);opacity:.4}to{transform:none;opacity:1}}
+.wrap{touch-action:pan-y}
+
 /* toast */
 #toast{position:fixed;z-index:60;left:50%;transform:translateX(-50%);bottom:calc(142px + env(safe-area-inset-bottom));background:var(--ink);color:var(--bg);padding:10px 12px 10px 16px;border-radius:14px;font-size:14px;display:none;align-items:center;gap:12px;max-width:calc(100vw - 32px);box-shadow:0 8px 24px rgba(0,0,0,.25)}
 #toast.show{display:flex}
@@ -285,7 +290,7 @@ select.gin-r{text-align:left;width:auto}
 
 /* ---------- constants & small helpers ---------- */
 const KEY = 'odeme-defteri-v1';
-const VERSION = '1.0';
+const VERSION = '1.1';
 const pad = n => String(n).padStart(2, '0');
 const ymOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 const ymdOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -563,8 +568,9 @@ function dueText(o) {
 }
 const PILL = {
   overdue: ['Gecikti', 'neg'], today: ['Bugün', 'warn'], soon: ['Yaklaşıyor', 'acc'], partial: ['Kısmi', 'acc'],
-  minpaid: ['Asgari ödendi', 'warn'], paid: ['Ödendi', 'pos'], skipped: ['Atlandı', ''], needs: ['Ekstre gir', 'warn']
+  minpaid: ['Asgari ödendi', 'warn'], paid: ['Ödendi', 'pos'], skipped: ['Atlandı', ''], needs: ['Ekstre gir', 'warn'], upcoming: ['Bekliyor', '']
 };
+const pillOf = st => PILL[st] || ['', ''];
 
 /* ---------- UI state ---------- */
 let view = 'month';
@@ -577,7 +583,7 @@ const sheetRoot = document.getElementById('sheet-root');
 /* ---------- views ---------- */
 function rowHTML(o) {
   const it = o.item;
-  const [pl, pc] = PILL[o.status] || ['', ''];
+  const [pl, pc] = pillOf(o.status);
   let right;
   if (o.needs) right = `<span class="amt muted">—</span>`;
   else if (o.status === 'paid') right = `<span class="amt">${money(o.paid)}</span>`;
@@ -728,7 +734,7 @@ function debtsView() {
       const meta = o ? `${monthLabel(x.P)} ekstresi ${money(o.due)}${o.min != null ? ` · asgari ${money(o.min)}` : ''}` : 'Henüz ekstre girilmedi';
       return `<button type="button" class="debt" data-action="open-item" data-id="${esc(x.it.id)}" data-p="${x.P || cur}">
         <span class="debt-head"><span class="ico">${IC.kart}</span><span class="mid"><span class="name">${esc(x.it.name)}</span><span class="sub">${meta}</span></span>
-        <span class="end"><span class="amt">${money(x.left)}</span>${o ? `<span class="pill ${PILL[o.status][1]}">${PILL[o.status][0]}</span>` : ''}</span></span>
+        <span class="end"><span class="amt">${money(x.left)}</span>${o && pillOf(o.status)[0] ? `<span class="pill ${pillOf(o.status)[1]}">${pillOf(o.status)[0]}</span>` : ''}</span></span>
         ${o && o.due > 0 ? `<span class="prog"><i style="width:${Math.min(100, o.paid / o.due * 100).toFixed(1)}%"></i></span>` : ''}
       </button>`;
     }).join('') + `</div></section>`;
@@ -792,7 +798,11 @@ function renderTabs() {
   document.getElementById('fab').innerHTML = IC.plus;
 }
 function render() {
-  app.innerHTML = view === 'month' ? monthView() : view === 'debts' ? debtsView() : settingsView();
+  try {
+    app.innerHTML = view === 'month' ? monthView() : view === 'debts' ? debtsView() : settingsView();
+  } catch (err) {
+    app.innerHTML = `<div class="wrap"><div class="banner warn"><p><b>Bu ekran açılırken bir hata oluştu.</b> Verilerin silinmedi. Bu ekranın görüntüsünü Claude'a gönder.<br><small>${esc(view)}: ${esc(err && err.message)}</small></p></div></div>`;
+  }
   renderTabs();
   if (sheet && sheet.type === 'item') renderSheet();
 }
@@ -1240,7 +1250,7 @@ function markBackup() { state.settings.lastBackup = localISO(new Date()); save()
 const actions = {
   'close-sheet': () => closeSheet(),
   tab: el => { view = el.dataset.tab; closeSheet(); render(); window.scrollTo(0, 0); },
-  'nav-month': el => { viewP = addM(viewP, Number(el.dataset.d)); render(); },
+  'nav-month': el => goMonth(Number(el.dataset.d)),
   'nav-today': () => { viewP = curYM(); render(); },
   add: () => openSheet({ type: 'form', focus: '#f-name' }),
   'pick-date': (el, e) => { const i = el.querySelector('input[type=date]'); if (e.target === i) return; try { i.showPicker(); } catch (x) { i.focus(); i.click(); } },
@@ -1346,6 +1356,30 @@ document.getElementById('file-input').addEventListener('change', async e => {
 });
 document.addEventListener('input', e => { const f = e.target.form; if (f && f.dataset.form === 'item') syncForm(f); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheet) closeSheet(); });
+
+// Swipe left = next month, swipe right = previous month (only on the month screen).
+let touch0 = null;
+app.addEventListener('touchstart', e => {
+  if (view !== 'month' || sheet || e.touches.length !== 1) { touch0 = null; return; }
+  const t = e.touches[0]; touch0 = { x: t.clientX, y: t.clientY, at: Date.now() };
+}, { passive: true });
+app.addEventListener('touchend', e => {
+  if (!touch0) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touch0.x, dy = t.clientY - touch0.y, dt = Date.now() - touch0.at;
+  touch0 = null;
+  if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.6 || dt > 800) return;
+  goMonth(dx < 0 ? 1 : -1);
+}, { passive: true });
+function goMonth(d) {
+  viewP = addM(viewP, d);
+  render();
+  const w = app.querySelector('.wrap');
+  if (w && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    w.classList.add(d > 0 ? 'from-right' : 'from-left');
+    setTimeout(() => w.classList.remove('from-right', 'from-left'), 260);
+  }
+}
 
 // Re-render when the app comes back (dates and "x gün kaldı" stay fresh).
 let lastDay = ymdOf(new Date());

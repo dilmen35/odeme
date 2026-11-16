@@ -1,6 +1,6 @@
 // Offline support: the app shell is cached so it opens without internet.
 // Bump CACHE when index.html changes so phones pick up the new version.
-const CACHE = 'odeme-defteri-v2';
+const CACHE = 'odeme-defteri-v3';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
